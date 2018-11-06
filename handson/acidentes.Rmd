@@ -1,0 +1,82 @@
+---
+title: "POA_accidents"
+author: "arthur"
+date: "October 31, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+First we need to download the dataset that contains the data about the accidents in Porto Alegre in 2016.
+
+```{r}
+file <- "acidentes-2016.csv"
+if(!file.exists(file)){
+  download.file("http://datapoa.com.br/storage/f/2017-08-03T13%3A19%3A45.538Z/acidentes-2016.csv",
+	destfile=file)
+}
+```
+  
+Read the csv and put it in a dataframe
+  
+```{r}
+library(readr);
+df <- read_delim(file, delim=";");
+head(df);
+```
+
+
+Now we will try to answer the questions:
+
+  - Is there a time of the year with more accidents?
+  - How many vehicles are usually involved?
+  - Is there a specific weekday with more accidents?
+  - Advanced: are there some area in POA with more accidents?
+      - An area can be a neighborhood, an intersection. Define precisely what is your region in your Rmd.
+
+To answer the first question, we will just count the entries by date.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+
+df %>%  group_by(DATA) %>% summarise(N=n()) %>% ggplot(aes(x=DATA, y=N)) + geom_line() + ylim(0,NA)
+```
+
+Visualizing by day is messy, let's try by month.
+
+```{r}
+library(lubridate)
+df %>%  group_by(MES) %>% summarise(N=n())  %>% ggplot(aes(x=MES, y=N)) + geom_line() + ylim(0,NA) + theme_bw()
+```
+
+Actually, some months have more days than others, we must divide the amount of crashes by the number of days in each month.
+
+```{r}
+df_datas %>% group_by(DATA) %>%  summarize(amount=sum(N)/n()) %>% ggplot(aes(x=DATA, y=amount)) + geom_line() + ylim(0,NA) + theme_bw()
+```
+
+We can see that february is the month with the least crashes. One hypothesis is that it is the month when Porto Alegre is more desert because a lot of people go to other cities to enjoy the carnival.
+March is the month with the most crashes.
+
+
+It could be interesting to analyze by day of the week.
+
+```{r}
+dias_sem=c("DOMINGO", "SEGUNDA-FEIRA", "TERCA-FEIRA", "QUARTA-FEIRA", "QUINTA-FEIRA", "SEXTA-FEIRA", "SABADO")
+df %>% group_by(DIA_SEM) %>% summarize(N=n()) %>% ggplot(aes(x=DIA_SEM, y=N)) + geom_bar(stat = "identity") + ylim(0,NA) + scale_x_discrete(limits=dias_sem) + theme_bw()
+```
+We see that in the weekends there are not as many crashes as in the rest of the week. The days with the most crashes are mondays and fridays.
+
+
+It could be intereseting to analyze by time of the day. 
+
+
+Let's see the number of accidents, by weekday, from midnight to 6 AM. 
+
+```{r}
+df %>% filter(FX_HORA < 6) %>% group_by(DIA_SEM) %>% summarize(N=n()) %>% ggplot(aes(x=DIA_SEM, y=N)) + geom_bar(stat = "identity") + ylim(0,NA) + scale_x_discrete(limits=dias_sem) + theme_bw()
+```
+
