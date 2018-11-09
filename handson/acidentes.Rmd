@@ -2,7 +2,9 @@
 title: "POA_accidents"
 author: "arthur"
 date: "October 31, 2018"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -48,15 +50,25 @@ df %>%  group_by(DATA) %>% summarise(N=n()) %>% ggplot(aes(x=DATA, y=N)) + geom_
 Visualizing by day is messy, let's try by month.
 
 ```{r}
-library(lubridate)
-df %>%  group_by(MES) %>% summarise(N=n())  %>% ggplot(aes(x=MES, y=N)) + geom_line() + ylim(0,NA) + theme_bw()
+df %>%  group_by(MES) %>% summarise(N=n())  %>% ggplot(aes(x=as.factor(MES), y=N)) + geom_point() + ylim(0,NA) + theme_bw() 
 ```
 
-Actually, some months have more days than others, we must divide the amount of crashes by the number of days in each month.
+Actually, some months have more days than others, we must normalize the amount of crashes by the number of days in each month.
 
 ```{r}
-df_datas %>% group_by(DATA) %>%  summarize(amount=sum(N)/n()) %>% ggplot(aes(x=DATA, y=amount)) + geom_line() + ylim(0,NA) + theme_bw()
+library(lubridate)
+df %>% group_by(MES) %>% summarize(normalized=n()/days_in_month(DATA) %>% head(1))  %>% ggplot(aes(x=as.factor(MES), y=normalized)) + geom_point() + ylim(0,NA) + theme_bw()
 ```
+
+I can't believe that this acutally worked, let's verify:
+```{r}
+df %>% filter(MES==1) %>% summarise(N=n()) / 31
+df %>% filter(MES==2) %>% summarise(N=n()) / 29
+df %>% filter(MES==3) %>% summarise(N=n()) / 31
+
+```
+
+Seems legit :)
 
 We can see that february is the month with the least crashes. One hypothesis is that it is the month when Porto Alegre is more desert because a lot of people go to other cities to enjoy the carnival.
 March is the month with the most crashes.
@@ -66,17 +78,179 @@ It could be interesting to analyze by day of the week.
 
 ```{r}
 dias_sem=c("DOMINGO", "SEGUNDA-FEIRA", "TERCA-FEIRA", "QUARTA-FEIRA", "QUINTA-FEIRA", "SEXTA-FEIRA", "SABADO")
-df %>% group_by(DIA_SEM) %>% summarize(N=n()) %>% ggplot(aes(x=DIA_SEM, y=N)) + geom_bar(stat = "identity") + ylim(0,NA) + scale_x_discrete(limits=dias_sem) + theme_bw()
+df %>% group_by(DIA_SEM) %>% summarize(N=n()) %>% ggplot(aes(x=DIA_SEM, y=N)) + geom_point(stat = "identity") + ylim(0,NA) + scale_x_discrete(limits=dias_sem) + theme_bw()
 ```
 We see that in the weekends there are not as many crashes as in the rest of the week. The days with the most crashes are mondays and fridays.
 
-
 It could be intereseting to analyze by time of the day. 
-
 
 Let's see the number of accidents, by weekday, from midnight to 6 AM. 
 
 ```{r}
-df %>% filter(FX_HORA < 6) %>% group_by(DIA_SEM) %>% summarize(N=n()) %>% ggplot(aes(x=DIA_SEM, y=N)) + geom_bar(stat = "identity") + ylim(0,NA) + scale_x_discrete(limits=dias_sem) + theme_bw()
+df %>% filter(FX_HORA < 6) %>% group_by(DIA_SEM) %>% summarize(N=n()) %>% ggplot(aes(x=DIA_SEM, y=N)) + geom_point(stat = "identity") + ylim(0,NA) + scale_x_discrete(limits=dias_sem) + theme_bw()
 ```
+
+Maybe the best way to represent this is to have a stacked bar plot with the days of the week on the x axis and the amount of accidents by period of the day like late night, day, night, etc. stacked forming the total amount of crashes.
+
+First we create a dataframe with a variable that is the time of the day:
+
+```{r}
+df %>% filter(FX_HORA < 6) %>% group_by(DIA_SEM) %>% summarize(N=n()) -> late_night
+late_night$time = "late_night"
+df %>% filter(FX_HORA > 6 & FX_HORA < 19) %>% group_by(DIA_SEM) %>% summarize(N=n()) -> day
+day$time = "day"
+df %>% filter(FX_HORA > 19) %>% group_by(DIA_SEM) %>% summarize(N=n()) -> night
+night$time = "night"
+by_hour = rbind(day, rbind(late_night, night))
+by_hour
+```
+
+```{r}
+by_hour %>% ggplot() + geom_bar(aes(y=N, x=DIA_SEM, fill=time), stat="identity") + theme_bw() + scale_x_discrete(limits=dias_sem)
+```
+That does not look quite as good as I thought...
+
+Let's try one plot of accidents by hour of the day
+
+```{r}
+df %>% group_by(FX_HORA) %>% summarise(N=n()) %>% ggplot(aes(x=as.factor(FX_HORA), y=N)) + geom_point() + theme_bw()
+```
+
+There is some problem with the data, maybe some observations do not have any value on FX_HORA
+
+```{r}
+df %>% select(FX_HORA) %>% summary()
+```
+
+There are 3 NA's, we can just filter them out and redo the plot
+
+```{r}
+df %>% group_by(FX_HORA) %>% filter(!is.na(FX_HORA)) %>% summarise(N=n()) %>% ggplot(aes(x=as.factor(FX_HORA), y=N)) + geom_point() + theme_bw()
+```
+
+That looks good. There are way more accidents between 8 AM and 17 PM than in other periods of the day. I would have guessed that 18 to 19 PM would be way worse.
+
+It's enough for now, let's try to answer the other questions.
+
+How many vehicles are usually involved?
+
+```{r}
+names(df)
+```
+
+Maybe CONT_ACID is the amount of vehicles
+
+```{r}
+df %>% select(CONT_ACID, AUTO, TAXI, LOTACAO, ONIBUS_URB, ONIBUS_MET, ONIBUS_INT, CAMINHAO, MOTO, CARROCA, BICICLETA, OUTRO) %>% head(3)
+```
+
+It's not. I must add all the vehicles.
+
+```{r}
+df %>%  group_by(ID) %>% summarize(vehicles = sum(AUTO, TAXI, LOTACAO, ONIBUS_URB, ONIBUS_MET, ONIBUS_INT, CAMINHAO, MOTO, CARROCA, BICICLETA, OUTRO)) %>% select(vehicles) -> by_vehicles 
+by_vehicles %>% summary()
+```
+There is an accident with 0 vehicles?
+```{r}
+by_vehicles %>% filter(vehicles > 0 ) -> by_vehicles;
+```
+
+Quick plot to help us visualize this:
+```{r}
+by_vehicles %>% group_by(vehicles) %>% summarize(N=n()) %>% ggplot(aes(x=vehicles, y=N)) + theme_bw(base_size=22) + geom_bar(stat="identity")
+```
+
+Clearly most accidents happen between two vehicles.
+
+
+About the locations, how can we define a location if all we have is coordinates and street names? Maybe let's try by street/avenue first:
+
+The accidents on crossroads will count for both streets.
+
+```{r}
+df %>% filter(!is.na(LOG1)) %>% group_by(LOG1) %>% summarize(N=n()) -> log_1
+df %>% filter(!is.na(LOG2)) %>% group_by(LOG2) %>% summarize(N=n()) -> log_2
+
+# Sorry, I'm sure there is a much better way of doing this but this works for now and I would rather save time
+names(log_2)[1] <- "LOG1"
+rbind(log_1, log_2) %>% group_by(LOG1) %>% summarize(acc=sum(N)) -> acc_by_street
+
+acc_by_street %>% arrange(-acc)
+
+```
+
+Good, we have the avenues with the most crashes in 2016. Maybe viewing the crossroads with the most accidents could be interesting?
+
+```{r}
+df %>% filter(!is.na(LOG2)) %>%  group_by(LOG1, LOG2) %>% summarize(N=n()) %>% arrange(-N)
+```
+
+Ipiranga has a lot of accidents but it also is huge so it's normal.
+
+Maybe we can use the coordinates to view something more interesting. First we need to verify the integrity of the data.
+
+```{r}
+df %>% select(LONGITUDE, LATITUDE) %>% summary()
+```
+
+That huge value is obviously missing a dot. We could fix it but we could also just don't consider it.
+
+```{r}
+df %>% filter(LATITUDE > -60) %>% select(LATITUDE, LONGITUDE) %>% summary()
+```
+
+We still have -51.23 for latitude and -30.05 for longitude. Someone obviously put it in the wrong field, we must remove those. Let's define that all values for latitude must be between -29.5 and -30.5, and longitude between -50.8 and -51.8.
+
+```{r}
+df %>% filter(LATITUDE > -30.5 & LATITUDE < -29.5 & LONGITUDE > -51.8 & LONGITUDE < -50.8) %>% select(LATITUDE, LONGITUDE) -> df_filtered
+df_filtered %>% summary
+```
+Since the coordinates are heavily rounded and there is a maximum of 25 values for latitude and 21 for longitude, maybe if I group the accidents by latitude and longitude I can know the "squares" with the most accidents 
+
+```{r}
+df_filtered %>% filter(LATITUDE > -30.5 & LATITUDE < -29.5 & LONGITUDE > -51.8 & LONGITUDE < -50.8) %>% group_by(LATITUDE, LONGITUDE) %>% summarize(N=n()) %>% arrange(-N)
+```
+
+Well, it's the summary function that rounds it... I think I will have to round it by hand. 
+
+```{r}
+df_rounded = df_filtered
+df_rounded$LATITUDE = round(df_filtered$LATITUDE, 3)
+df_rounded$LONGITUDE = round(df_filtered$LONGITUDE, 3)
+df_rounded %>% group_by(LATITUDE,LONGITUDE) %>% summarise(N=n()) -> df_rounded
+df_rounded %>% arrange(-N)
+
+```
+
+Good. Now I want to plot this as a heatmap.
+
+```{r}
+df_rounded %>% ggplot(aes(x=LONGITUDE, y=LATITUDE)) + geom_tile(aes(fill=N), colour="white") + scale_fill_gradient(low = "green",    high = "red") + theme_bw()
+```
+
+Wow... much better than expected. This acutally looks like Porto Alegre. We just have to fix the proportions.
+
+Latitude has an amplitude of about 25 and latitude 21, so an aspect ratio of 25/21? Let's try.
+
+```{r}
+df_rounded %>% ggplot(aes(x=LONGITUDE, y=LATITUDE)) + geom_tile(aes(fill=N), colour="white") + scale_fill_gradient(low = "green",    high = "red") + theme_bw() + coord_fixed(25/21)
+```
+
+That looks better. Now we can zoom into the center. Let's see where are the places with more than 25 accidents.
+
+```{r}
+df_rounded %>% filter(N > 25) %>% summary()
+```
+
+it's between -30.10 and -30.00 latitude and -51.23 and -51.15 longitude. 
+Also that gives us an aspect ratio of  10/8 or 5/4
+
+```{r}
+df_rounded %>% ggplot(aes(x=LONGITUDE, y=LATITUDE)) + geom_tile(aes(fill=N), colour="white") + scale_fill_gradient(low = "green",    high = "red") + theme_bw() + coord_cartesian(ylim = c(-30.10, -30.00), xlim = c(-51.23, -51.15)) 
+```
+
+That looks bad and "+ coord_fixed(5/4)" messes with it, I think the previous plot is already good enough.
+
+
+
 

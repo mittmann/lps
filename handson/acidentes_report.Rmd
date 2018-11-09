@@ -1,0 +1,98 @@
+---
+title: "Acidentes Report"
+output: pdf_document
+---
+---
+title: "POA_accidents"
+author: "arthur"
+date: "October 31, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+First we need to download the dataset that contains the data about the accidents in Porto Alegre in 2016.
+
+```{r}
+file <- "acidentes-2016.csv"
+if(!file.exists(file)){
+  download.file("http://datapoa.com.br/storage/f/2017-08-03T13%3A19%3A45.538Z/acidentes-2016.csv",
+	destfile=file)
+}
+```
+  
+Read the csv and put it in a dataframe
+  
+```{r}
+library(readr);
+df <- read_delim(file, delim=";");
+head(df);
+```
+
+- Is there a time of the year with more accidents?
+
+Let's see if we can use the MES column.
+```{r}
+library(tidyverse);
+df %>% select(MES) %>% summary()
+```
+
+It looks okay, so I will plot the accidents by month, normalized by the number of days in that month.
+```{r}
+library(ggplot2);
+library(lubridate);
+
+df %>% group_by(MES) %>% summarize(normalized=n()/days_in_month(DATA) %>% head(1))  %>% ggplot(aes(x=as.factor(MES), y=normalized)) + geom_point() + ylim(0,NA) + theme_bw(base_size=22) + xlab("Month") + ylab("Accidents per day")
+```
+
+
+We can see that february is the month with the least crashes. One hypothesis is that it is the month when Porto Alegre is more desert because a lot of people go to other cities to enjoy the carnival.
+March is the month with the most crashes.
+
+
+- How many vehicles are usually involved?
+
+First I must add all the vehicles to have a vehicle amount variable.
+
+```{r}
+df %>%  group_by(ID) %>% summarize(vehicles = sum(AUTO, TAXI, LOTACAO, ONIBUS_URB, ONIBUS_MET, ONIBUS_INT, CAMINHAO, MOTO, CARROCA, BICICLETA, OUTRO)) %>% filter(vehicles > 0) -> by_vehicles  
+```
+
+Now we can have a summary of this data:
+```{r}
+by_vehicles %>% group_by(vehicles) %>% summarize(N=n())
+```
+
+
+It is pretty clear that most accidents involve two vehicles. A plot could make it even clearer:
+
+```{r}
+by_vehicles %>% group_by(vehicles) %>% summarize(N=n()) %>% ggplot(aes(x=vehicles, y=N)) + theme_bw(base_size=22) + geom_point()
+```
+
+
+
+- Is there a specific weekday with more accidents?
+
+A quick plot can show us that:
+
+```{r}
+dias_sem=c("DOMINGO", "SEGUNDA-FEIRA", "TERCA-FEIRA", "QUARTA-FEIRA", "QUINTA-FEIRA", "SEXTA-FEIRA", "SABADO")
+df %>% group_by(DIA_SEM) %>% summarize(N=n()) %>% ggplot(aes(x=DIA_SEM, y=N)) + geom_point(stat = "identity") + ylim(0,NA) + scale_x_discrete(limits=dias_sem) + theme_bw()
+```
+
+Friday(Sexta-feira) is the day with the most accidents, while the weekends are much safer.
+
+- Advanced: are there some area in POA with more accidents?
+
+If we consider an intersection as an area:
+
+```{r}
+df %>% filter(!is.na(LOG2)) %>%  group_by(LOG1, LOG2) %>% summarize(N=n()) %>% arrange(-N) %>% head(10)
+```
+
+The intersections between Avenida Ipiranga and Rua Dr. Salvador França and Rua Silva Só are the most dangerous.s
