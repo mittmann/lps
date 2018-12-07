@@ -1,0 +1,54 @@
+---
+title: "Report"
+author: "Arthur Mittmann Krause"
+date: "December 7, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Introduction
+
+For this we will be using the U.S. Homicide Reports dataset, that contains data about more than 22 thousand homicides in the US from 1980 to 2014, with information about the age, sex, race and relationship between the victim and the perpetrator. The dataset is available at the (https://www.kaggle.com/jyzaguirre/us-homicide-reports), but I have included it in the repository because there is no direct download link.
+
+We first have to unzip the dataset. It is assumed that whoever is reading this has shell available.
+```{sh}
+unzip -o homicides.zip
+```
+
+We read the dataset with the fread function due to its better performance.
+
+```{R}
+library(data.table)
+options(datatable.fread.datatable=FALSE);
+df <- fread("database.csv");
+```
+
+
+This analysis will aim to answer two questions:
+
+1) What is the most common relationship between victim and perpetrator and how did it change over time?
+2) How has the rate of black-on-black homicides changed over time? In which location did it decrease the most?
+
+#1)
+
+First we have to do a cleanup of teh data. First, we filter only the cases where the crime is solved and the relationship is known. Then, we group the multiple entries that mean a romantic relationship, the ones that mean some form of familiar relationship and everything that is not representative enough in a category named "Others".
+```{R}
+df %>% filter(`Crime Solved` == "Yes" & Relationship != "Unknown") %>% group_by(Relationship) %>% summarise(N=n()) %>% within (Relationship[(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband"))] <- "Romantic") %>% within (Relationship[(Relationship %in% c("Son", "Daughter","Mother", "Father", "Brother","Sister", "Stepfather", "Stepmother", "In-Law", "Stepdaughter","Stepson"))] <- "Family") %>% within(Relationship[!(Relationship %in% c("Stranger", "Acquaintance", "Romantic", "Family","Neighbor", "Friend"))] <- "Others") %>% group_by(Relationship) %>% summarise(N=sum(N)) %>% arrange(-N) -> summary_relationship;
+summary_relationship$Relationship <- reorder(summary_relationship$Relationship, -summary_relationship$N);
+```
+
+Then we show these numbers in a simple and easy to visualize plot.
+```{R}
+summary_relationship %>% ggplot(aes(x=Relationship,y=N)) + geom_point() + theme_bw(base_size=16) + theme(axis.text.x=element_text(size=14,angle=45, hjust=1, vjust=0.91)) + ylim(0, NA) + ylab("Number of Homicides")
+```
+
+The most common relationship between victim and perpetrator is Acquaintance. 
+
+How did it change over time?
+
+```{R}
+df %>% filter(`Crime Solved` == "Yes" & Relationship != "Unknown") %>% group_by(Relationship,Year) %>% summarise(N=n()) %>% within (Relationship[(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband"))] <- "Romantic") %>% within (Relationship[(Relationship %in% c("Son", "Daughter","Mother", "Father", "Brother","Sister", "Stepfather", "Stepmother", "In-Law", "Stepdaughter","Stepson"))] <- "Family") %>% within(Relationship[!(Relationship %in% c("Stranger", "Acquaintance", "Romantic", "Family","Neighbor", "Friend"))] <- "Others") %>% group_by(Relationship, Year) %>% summarise(N=sum(N)) %>% arrange(-N) %>% ggplot(aes(x=Year, y=N, fill=Relationship, color=Relationship)) + geom_line() + scale_colour_manual(values = c("#1b9e77","#d95f02","#7570b3","#e7298a","#66a61e","#e6ab02","#a6761d")) + theme_bw(base_size=15) + scale_x_continuous(minor_breaks = seq(1980, 2014, 1)) +  ylim(0,NA) + labs(color="Relationship") + ylab("Homicides")
+```
