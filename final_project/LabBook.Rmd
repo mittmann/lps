@@ -301,3 +301,11 @@ I realized I didn't answer the question of how the relationships between murdere
 df %>% filter(`Crime Solved` == "Yes" & Relationship != "Unknown") %>% group_by(Relationship,Year) %>% summarise(N=n()) %>% within (Relationship[(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband"))] <- "Romantic") %>% within (Relationship[(Relationship %in% c("Son", "Daughter","Mother", "Father", "Brother","Sister", "Stepfather", "Stepmother", "In-Law", "Stepdaughter","Stepson"))] <- "Family") %>% within(Relationship[!(Relationship %in% c("Stranger", "Acquaintance", "Romantic", "Family","Neighbor", "Friend"))] <- "Others") %>% group_by(Relationship, Year) %>% summarise(N=sum(N)) %>% arrange(-N) %>% ggplot(aes(x=Year, y=N, fill=Relationship, color=Relationship)) + geom_line()
 ```
 All kinds of relationships declined overall. There was a big rise in homicides between strangers in the early 1990's, maybe a rise in crime? That is interesting. I will put this in the final report.
+
+How much the homicides with male victims in romantic relationships declined from 1980 to 2014?
+
+```{R}
+solved %>% filter(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband")) %>% filter(Year==2014 | Year==1980) %>% filter(`Victim Sex` != "Unknown") %>% group_by (`Victim Sex`, Year) %>% summarise(N=n()) 
+```
+Homicides with female victims have fallen 32.18%, while the number for male victims declined 73.28%.
+

@@ -21,7 +21,7 @@ unzip -o homicides.zip
 We read the dataset with the fread function due to its better performance.
 
 ```{R}
-library(data.table)
+library(data.table);
 options(datatable.fread.datatable=FALSE);
 df <- fread("database.csv");
 ```
@@ -34,9 +34,9 @@ This analysis will aim to answer two questions:
 
 #1)
 
-First we have to do a cleanup of teh data. First, we filter only the cases where the crime is solved and the relationship is known. Then, we group the multiple entries that mean a romantic relationship, the ones that mean some form of familiar relationship and everything that is not representative enough in a category named "Others".
+We have to do a cleanup of teh data. First, we filter only the cases where the crime is solved and the relationship is known. Then, we group the multiple entries that mean a romantic relationship, the ones that mean some form of familiar relationship and everything that is not representative enough in a category named "Others".
 ```{R}
-df %>% filter(`Crime Solved` == "Yes" & Relationship != "Unknown") %>% group_by(Relationship) %>% summarise(N=n()) %>% within (Relationship[(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband"))] <- "Romantic") %>% within (Relationship[(Relationship %in% c("Son", "Daughter","Mother", "Father", "Brother","Sister", "Stepfather", "Stepmother", "In-Law", "Stepdaughter","Stepson"))] <- "Family") %>% within(Relationship[!(Relationship %in% c("Stranger", "Acquaintance", "Romantic", "Family","Neighbor", "Friend"))] <- "Others") %>% group_by(Relationship) %>% summarise(N=sum(N)) %>% arrange(-N) -> summary_relationship;
+df %>% filter(`Crime Solved`=="Yes" & Relationship!="Unknown") %>% group_by(Relationship) %>% summarise(N=n()) %>% within (Relationship[(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband"))] <- "Romantic") %>% within (Relationship[(Relationship %in% c("Son", "Daughter","Mother", "Father", "Brother","Sister", "Stepfather", "Stepmother", "In-Law", "Stepdaughter","Stepson"))] <- "Family") %>% within(Relationship[!(Relationship %in% c("Stranger", "Acquaintance", "Romantic", "Family","Neighbor", "Friend"))] <- "Others") %>% group_by(Relationship) %>% summarise(N=sum(N)) %>% arrange(-N) -> summary_relationship;
 summary_relationship$Relationship <- reorder(summary_relationship$Relationship, -summary_relationship$N);
 ```
 
@@ -52,3 +52,60 @@ How did it change over time?
 ```{R}
 df %>% filter(`Crime Solved` == "Yes" & Relationship != "Unknown") %>% group_by(Relationship,Year) %>% summarise(N=n()) %>% within (Relationship[(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband"))] <- "Romantic") %>% within (Relationship[(Relationship %in% c("Son", "Daughter","Mother", "Father", "Brother","Sister", "Stepfather", "Stepmother", "In-Law", "Stepdaughter","Stepson"))] <- "Family") %>% within(Relationship[!(Relationship %in% c("Stranger", "Acquaintance", "Romantic", "Family","Neighbor", "Friend"))] <- "Others") %>% group_by(Relationship, Year) %>% summarise(N=sum(N)) %>% arrange(-N) %>% ggplot(aes(x=Year, y=N, fill=Relationship, color=Relationship)) + geom_line() + scale_colour_manual(values = c("#1b9e77","#d95f02","#7570b3","#e7298a","#66a61e","#e6ab02","#a6761d")) + theme_bw(base_size=15) + scale_x_continuous(minor_breaks = seq(1980, 2014, 1)) +  ylim(0,NA) + labs(color="Relationship") + ylab("Homicides")
 ```
+
+Homicides in general declined, but the homicides between aqcuaintances declined the most. Homicides between strangers had a peak in the early 1990's, possibly indicating a rise in crime. 
+
+Bonus: Homicides in romantic relationships declined throughout the last decades, but how did the ratio of male and female victims in these homicides change over this period?
+
+```{R}
+df %>% filter(`Crime Solved`=="Yes") %>% filter(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband")) %>% filter(`Victim Sex` != "Unknown") %>% group_by (`Victim Sex`, Year) %>% summarise(N=n()) %>%
+  ggplot(aes(x=Year, y=N, color=`Victim Sex`)) + geom_line() + theme_bw(base_size=16) +  scale_x_continuous(minor_breaks = seq(1980, 2014, 1)) +  ylim(0,NA) + labs(color="Victim Sex") + ylab("Amount of Homicides")
+```
+Homicides in romantic relationships with female victims are more common, and the homicides with male victims have declined more since 1980: 73.28%. In 2014, there was 3.18 times more female victims in romantic relationships than male victims.
+
+#2)
+
+To answer the question, we need to plot the homicides with black victims and black perpetrators throughout the years along with the numbers for the other homicides, in order to get a significative answer, since homicides overall have been declining. The plot has many colors but they are supposed to be print friendly.
+
+```{R}
+df %>% filter(`Crime Solved` =="Yes") -> solved;
+solved$comb_races <- NA;
+solved %>% mutate(comb_races = paste(`Victim Race`, `Perpetrator Race`) ) -> with_combined;
+with_combined %>% group_by(comb_races, Year) %>% summarise(N=n()) -> with_combined_summarised;
+with_combined_summarised %>% group_by(Year)  %>% mutate(percent = 100 * (N/sum(N))) -> percent_var;
+
+with_combined_summarised %>% within(comb_races[!(comb_races %in% c("White White", "Black Black", "White Black", "Black White"))] <- "Others" ) -> filtered_others
+filtered_others %>% group_by(comb_races, Year) %>% summarise(N=sum(N)) %>% group_by(Year)  %>% mutate(percent = 100 * (N/sum(N))) %>% ggplot(aes(x=Year, y=percent, fill=comb_races, color=comb_races)) + scale_colour_manual(values = c("#d73027", "#fc8d59", "#fee090", "#91bfdb", "#4575b4"), labels = c(`Black Black`="Black-on-Black",`Black White`="Black-on-White",Others="Others",`White Black`="White-on-Black",`White White`="White-on-White")) + geom_line() + theme_bw(base_size=15) + scale_x_continuous(minor_breaks = seq(1980, 2014, 1)) +  ylim(0,NA) + labs(color="Perpetrator and \n Victim Races") + ylab("Percentage")  
+```
+
+Homicides between black people are only slightly less common than those between white people. Only 12.6% of the United States population is black, while 73.3% is white, which indicates that black people suffer much more from violence proportionally. Also, white people are responsible for the homicide of black people more often than the opposite. During the spike in homicides between strangers in the early 1990's, the ratio of homicides between black people surpassed the ratio of homicides between white people, indicating that this wave of violence affected this population more intensively. 
+
+
+Since there is some variance from one year to another, we can smooth the number by calculating the mean of the first and last five years to consider where it decreased the most. Also, due to some missing values in the last years, we need to consider the last year as 2009.
+
+
+Calculating the mean of the first and last period of 5 years:
+```{R}
+n <- 5
+df %>% filter(`Crime Solved`=="Yes") %>% filter(`Victim Race` == "Black" & `Perpetrator Race` == "Black") %>% filter (Year < (1980 + n)) %>% group_by(Year, State) %>% summarise(N=n()) %>% group_by(State) %>% summarise(mean=sum(N)/n) -> first_mean;
+df %>% filter(`Crime Solved`=="Yes")  %>% filter(`Victim Race` == "Black" & `Perpetrator Race` == "Black") %>% filter (Year > (2009-n) & Year < 2010) %>% group_by(Year, State) %>% summarise(N=n()) %>% group_by(State) %>% summarise(mean=sum(N)/n) -> last_mean;
+means <- merge(first_mean, last_mean, by="State")
+means$variation <- ((means$mean.y - means$mean.x) / means$mean.x) * 100
+```
+
+In order to get the information about in which location the homicides between black people descreased the most during this period, we need to consider only the states with a significative number of these homicides. I chose to work with the states with 10 greatest mean on the first period.
+
+```{R}
+first_mean %>% arrange(-mean) %>% head(10) %>% select(State) -> states
+```
+
+And we plot:
+
+```{R}
+first_mean %>% arrange(-mean) %>% head(10) %>% select(State) -> states
+means %>% filter(State %in% t(states)) -> selected_states
+
+selected_states$State <- reorder(selected_states$State, selected_states$variation)
+selected_states %>% ggplot(aes(x=State,y=variation)) + geom_point() + theme_bw(base_size=14) + ylab("Percentual Variation") + geom_hline(yintercept=0, linetype="dashed", color = "red", size=1)  + theme(axis.text.x=element_text(size=14,angle=45, hjust=1, vjust=0.91))
+```
+Illinois is the state where it decreased the most, while between the 10 states with the most homicides between black people in the first period of five years, only Pennsylvannia has seen a rise on the number of occurrences.
