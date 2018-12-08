@@ -2,7 +2,9 @@
 title: "Report"
 author: "Arthur Mittmann Krause"
 date: "December 7, 2018"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -36,12 +38,15 @@ This analysis will aim to answer two questions:
 
 We have to do a cleanup of teh data. First, we filter only the cases where the crime is solved and the relationship is known. Then, we group the multiple entries that mean a romantic relationship, the ones that mean some form of familiar relationship and everything that is not representative enough in a category named "Others".
 ```{R}
+library(tidyr);
+library(dplyr);
 df %>% filter(`Crime Solved`=="Yes" & Relationship!="Unknown") %>% group_by(Relationship) %>% summarise(N=n()) %>% within (Relationship[(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband"))] <- "Romantic") %>% within (Relationship[(Relationship %in% c("Son", "Daughter","Mother", "Father", "Brother","Sister", "Stepfather", "Stepmother", "In-Law", "Stepdaughter","Stepson"))] <- "Family") %>% within(Relationship[!(Relationship %in% c("Stranger", "Acquaintance", "Romantic", "Family","Neighbor", "Friend"))] <- "Others") %>% group_by(Relationship) %>% summarise(N=sum(N)) %>% arrange(-N) -> summary_relationship;
 summary_relationship$Relationship <- reorder(summary_relationship$Relationship, -summary_relationship$N);
 ```
 
 Then we show these numbers in a simple and easy to visualize plot.
 ```{R}
+library(ggplot2);
 summary_relationship %>% ggplot(aes(x=Relationship,y=N)) + geom_point() + theme_bw(base_size=16) + theme(axis.text.x=element_text(size=14,angle=45, hjust=1, vjust=0.91)) + ylim(0, NA) + ylab("Number of Homicides")
 ```
 
@@ -61,6 +66,7 @@ Bonus: Homicides in romantic relationships declined throughout the last decades,
 df %>% filter(`Crime Solved`=="Yes") %>% filter(Relationship %in% c("Wife", "Husband", "Girlfriend", "Boyfriend", "Common-Law Wife", "Common-Law Husband", "Ex-Wife", "Boyfriend/Girlfriend", "Ex-Husband")) %>% filter(`Victim Sex` != "Unknown") %>% group_by (`Victim Sex`, Year) %>% summarise(N=n()) %>%
   ggplot(aes(x=Year, y=N, color=`Victim Sex`)) + geom_line() + theme_bw(base_size=16) +  scale_x_continuous(minor_breaks = seq(1980, 2014, 1)) +  ylim(0,NA) + labs(color="Victim Sex") + ylab("Amount of Homicides")
 ```
+
 Homicides in romantic relationships with female victims are more common, and the homicides with male victims have declined more since 1980: 73.28%. In 2014, there was 3.18 times more female victims in romantic relationships than male victims.
 
 #2)
@@ -108,4 +114,5 @@ means %>% filter(State %in% t(states)) -> selected_states
 selected_states$State <- reorder(selected_states$State, selected_states$variation)
 selected_states %>% ggplot(aes(x=State,y=variation)) + geom_point() + theme_bw(base_size=14) + ylab("Percentual Variation") + geom_hline(yintercept=0, linetype="dashed", color = "red", size=1)  + theme(axis.text.x=element_text(size=14,angle=45, hjust=1, vjust=0.91))
 ```
+
 Illinois is the state where it decreased the most, while between the 10 states with the most homicides between black people in the first period of five years, only Pennsylvannia has seen a rise on the number of occurrences.
